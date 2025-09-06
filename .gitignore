@@ -1,0 +1,6 @@
+venv
+output.csv
+
+# Python cache
+__pycache__/
+*.py[cod]
