@@ -1,3 +1,4 @@
+import os
 import garth
 import datetime
 import csv
@@ -6,6 +7,7 @@ from types import SimpleNamespace
 device = SimpleNamespace()
 data = []
 today = datetime.date.today()
+date_pointer = None
 # today = datetime.date(2024, 12, 26)
 
 
@@ -28,19 +30,48 @@ def garmin_info():
     device.display_name = display_name
 
 
+def append_latest():
+        print("Last date in CSV:")
+        
+        with open("garmin_data.csv", "r") as f:
+            reader = csv.reader(f)
+            rows = list(reader)  
+
+        if rows:
+            last_row = rows[-1]  
+            last_date_str = last_row[0] 
+
+            # parse date
+            try:
+                last_date = datetime.datetime.strptime(last_date_str, "%Y-%m-%d").date()
+                print("Last date in CSV:", last_date)
+                # return last_date
+            except ValueError:
+                print("Could not parse date:", last_date_str)
+        
+
 
 def fetch_export_metrics():
 
-    #sync fresh
-    if True:
-        date_pointer = device.registered_date
-    #sync latest
+    #see if garmin_data.csv exists, if yes, load it and get the last date
+    if os.path.exists("garmin_data.csv"):
+        print("Garmin data file exists, do you want to append new data? (y/n)")
+        choice = input().strip().lower()
+        if choice == 'y':
+            append_latest()
+            # date_pointer = latest_entry_date + datetime.timedelta(days=1)
+            # print(f"Appending data from {latest_entry_date} to {today}")
+            return
+
+        else:
+            print("Exiting without fetching new data.")
+            return
     else:
-        #get the last date of sync and set it + 1 as date_pointer.
-        # date_pointer = device.metrics.latest('date').date + datetime.timedelta(days=1)
-        # print("Garmin last sync date - ", device.metrics.latest('date').date, " will begin sync from ", date_pointer)
-        print("")
-    
+        print("Fetching all data from registered date.")
+        date_pointer = device.registered_date
+
+    # fetch daily metrics from registered date to today
+    # date_pointer = device.registered_date
     total_days = (today - date_pointer).days
     day_count = 0
 
@@ -52,7 +83,6 @@ def fetch_export_metrics():
         daily_summary_params = {"calendarDate": str(date_pointer.isoformat())}
         daily_summary_data = garth.connectapi(daily_summary_url, params=daily_summary_params)
 
-        #your day is presumed to start with sleep and sleep hrv
         #sleep data
         sleep_url = f"/wellness-service/wellness/dailySleepData/{device.display_name}"
         sleep_params = {"date": str(date_pointer.isoformat()), "nonSleepBufferMinutes": 60}
@@ -146,7 +176,7 @@ def fetch_export_metrics():
 
 
 def export_to_csv():
-    with open("output.csv", "w", newline="") as file:
+    with open("garmin_data.csv", "w", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=data[0].keys())
         writer.writeheader()
         writer.writerows(data)
