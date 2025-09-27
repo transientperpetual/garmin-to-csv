@@ -6,11 +6,13 @@ from types import SimpleNamespace
 
 device = SimpleNamespace()
 data = []
-today = datetime.date.today()
+# today = datetime.date.today()
 date_pointer = None
-# today = datetime.date(2024, 12, 26)
+rows_list = []
+today = datetime.date(2024, 12, 28)
 
 
+# Gets garmin device info
 def garmin_info():
     # get garmin device name
     url = "/web-gateway/device-info/primary-training-device"
@@ -20,10 +22,10 @@ def garmin_info():
     epoch_ms  = device_data["RegisteredDevices"][0]["registeredDate"]
     registered_date = datetime.datetime.fromtimestamp(epoch_ms / 1000.0)
     
-    # comment out profile_image_uuid to avoid error in gath init.py
+    # comment out profile_image_uuid to avoid error in garth init.py
     display_name = garth.UserProfile.get().display_name
     
-    print("Garmin authentication successful.",device_name, registered_date, display_name)
+    print("Connected to", device_name)
 
     device.device_name = device_name
     device.registered_date = registered_date.date()
@@ -31,51 +33,56 @@ def garmin_info():
 
 
 def append_latest():
-        print("Last date in CSV:")
         
         with open("garmin_data.csv", "r") as f:
-            reader = csv.reader(f)
-            rows = list(reader)  
+            rows = list(csv.reader(f))
+
+        # remove last metrics row to avoid incomplete data
+        rows = rows[:-1]
 
         if rows:
-            last_row = rows[-1]  
-            last_date_str = last_row[0] 
+            last_row = rows[-1]
+            last_date_str = last_row[0]
 
             # parse date
             try:
                 last_date = datetime.datetime.strptime(last_date_str, "%Y-%m-%d").date()
-                print("Last date in CSV:", last_date)
-                # return last_date
+                print("Last entry in CSV on:", last_date)
+
+                #set date_pointer to next day
+                date_pointer = last_date + datetime.timedelta(days=1)
+
+                print(f"Appending data from {date_pointer} to {today}")
+                return date_pointer, rows
             except ValueError:
                 print("Could not parse date:", last_date_str)
         
 
-
 def fetch_export_metrics():
-
+    global rows_list
     #see if garmin_data.csv exists, if yes, load it and get the last date
     if os.path.exists("garmin_data.csv"):
-        print("Garmin data file exists, do you want to append new data? (y/n)")
+        print("garmin_data.csv found, do you want to append new metrics? (y/n)")
         choice = input().strip().lower()
         if choice == 'y':
-            append_latest()
-            # date_pointer = latest_entry_date + datetime.timedelta(days=1)
-            # print(f"Appending data from {latest_entry_date} to {today}")
-            return
+            date_pointer, rows_list = append_latest()     
+            print(len(rows_list), "rows loaded from existing CSV.")
 
         else:
-            print("Exiting without fetching new data.")
-            return
+            print("Exited")
+            date_pointer = device.registered_date
+            
     else:
         print("Fetching all data from registered date.")
         date_pointer = device.registered_date
 
     # fetch daily metrics from registered date to today
-    # date_pointer = device.registered_date
+    print("Appending data from", date_pointer, "to", today) 
+
     total_days = (today - date_pointer).days
     day_count = 0
 
-    while date_pointer < today:
+    while date_pointer <= today:
         day_count += 1
 
         #daily summary metrics
@@ -174,11 +181,23 @@ def fetch_export_metrics():
 
 
 
-
 def export_to_csv():
-    with open("garmin_data.csv", "w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=data[0].keys())
-        writer.writeheader()
-        writer.writerows(data)
+
+    if len(rows_list) > 0:
+        with open("garmin_data.csv", "w", newline="") as file:
+            writer = csv.writer(file)
+            print("rows list length - ", len(rows_list))
+            writer.writerows(rows_list)
+
+        with open("garmin_data.csv", "a", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=data[0].keys())
+            writer.writerows(data)
+    
+    else:
+        with open("garmin_data.csv", "a", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
+
 
     print("Garmin data exported to CSV file successfully")

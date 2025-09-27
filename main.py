@@ -5,18 +5,18 @@ import csv
 import os
 
 # # Authenticate user
-# authenticate()
+authenticate()
 
 # # Data export filters and tranformations
-# garmin_info()
+garmin_info()
 
 # # Fetch  data
-# fetch_export_metrics()
+fetch_export_metrics()
 
 # #Export data
-# export_to_csv()
+export_to_csv()
 
-append_latest()
+# append_latest()
 
 
 
