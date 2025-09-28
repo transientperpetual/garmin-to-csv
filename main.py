@@ -1,24 +1,26 @@
 import garth
 from methods.auth import authenticate
-from methods.data_fetch_export import garmin_info, fetch_export_metrics, export_to_csv, append_latest
+from methods.data_fetch_export import GarminDataFetcher, CSVExporter
 import csv
 import os
 
-# # Authenticate user
-authenticate()
+def main():
+    #Authenticate user
+    authenticate()
 
-# # Data export filters and tranformations
-garmin_info()
+    fetcher = GarminDataFetcher()
+    fetcher.connect_device()
 
-# # Fetch  data
-fetch_export_metrics()
+# Decide if appending or starting fresh
+    append_existing = input("Append existing CSV data? (y/n): ").strip().lower() == "y"
 
-# #Export data
-export_to_csv()
+    metrics = fetcher.fetch_metrics(append_existing=append_existing)
 
-# append_latest()
+    exporter = CSVExporter("garmin_data.csv")
+    exporter.export(metrics, fetcher.rows_list)
 
-
+if __name__ == "__main__":
+    main()
 
 
 
