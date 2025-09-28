@@ -7,7 +7,7 @@ class GarminDataFetcher:
         self.data = []
         self.rows_list = []
         # self.today = datetime.date.today()
-        self.today = datetime.date(2025, 1, 14)
+        self.today = datetime.date(2025, 1, 18)
 
     def connect_device(self):
         url = "/web-gateway/device-info/primary-training-device"
@@ -50,7 +50,6 @@ class GarminDataFetcher:
             return self.device.registered_date, []
 
         last_date = datetime.datetime.strptime(rows[-1][0], "%Y-%m-%d").date()
-        print("Last entry in CSV:", last_date, rows[-1])
         return last_date, rows
 
 
