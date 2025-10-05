@@ -1,5 +1,5 @@
 import os, csv, datetime, garth
-from datetime import time
+from datetime import date, time
 from types import SimpleNamespace
 
 class GarminDataFetcher:
@@ -25,7 +25,7 @@ class GarminDataFetcher:
     def activity_metrics(self):
         url = "/activitylist-service/activities/search/activities"
         start = 0               #activity date offset
-        limit = 5            #max no. of activities to fetch
+        limit = 20         #max no. of activities to fetch
 
         params = {"start": str(start), "limit": str(limit)}
         detailed_activities = garth.connectapi(url, params=params)
@@ -57,7 +57,7 @@ class GarminDataFetcher:
             "Start Time" : activity["startTimeLocal"], 
             "Activity When": activity_when,
             "Type" : activity["activityType"]["typeKey"],
-            "Distance" : round(activity.get("distance")),
+            "Distance" : activity.get("distance"),
             "Duration" : round(activity["duration"]),
             "Elapsed Duration": round(activity["elapsedDuration"]),
             "Moving Duration" : activity.get("movingDuration"),
@@ -81,37 +81,41 @@ class GarminDataFetcher:
             activities.append(activity_subset)
 
             activities.sort(key=lambda x: datetime.datetime.strptime(x["Start Time"], "%Y-%m-%d %H:%M:%S"))
-                
-
 
             #Create general table.
             # For multiple activities in the day, the one with more calories will be chosen for the general day metrics.
-            # More suitable methods can be devised if one frequently registers more than 1 activity in a day.
+            # More suitable methods can be devised if one frequently registers more than 1 activity in a day (this is rare for me).
 
         # # Get headers from the keys of the first activity
-        # headers = filtered_activities[0].keys()
+        # headers = activities[0].keys()
 
         # with open("garmin_activities.csv", mode="w", newline="", encoding="utf-8") as file:
         #     writer = csv.DictWriter(file, fieldnames=headers)
         #     writer.writeheader()
-        #     writer.writerows(filtered_activities)
+        #     writer.writerows(activities)
 
-        # print(f"Saved {len(filtered_activities)} activities to ")
+        # print(f"Saved {len(activities)} activities to ")
 
         return activities
 
     def all_data(self):
+        # daily_metrics = self.fetch_metrics()       # list of dicts with "Date"
+        activity_metrics = self.activity_metrics() # list of dicts with "Start Time" + "Calories"
 
-        #list of dicts
-        daily_metrics = self.fetch_metrics()
-        activity_metrics = self.activity_metrics()
+        filtered_activities = {}
 
-        for activity_metric in activity_metrics:
-            print(datetime.datetime.strptime(activity_metric["Start Time"], "%Y-%m-%d %H:%M:%S").date)
+        for activity in activity_metrics:
+            current_date = datetime.datetime.strptime(activity["Start Time"], "%Y-%m-%d %H:%M:%S").date()
 
-        for daily_metric in daily_metrics:
-            print(daily_metric["Date"])
-        # print(daily_metrics)
+            if current_date not in filtered_activities or activity["Calories"] > filtered_activities[current_date]["Calories"]:
+                filtered_activities[current_date] = activity
+            
+        filtered_activity_list = list(filtered_activities.values())
+
+        for act in filtered_activity_list:
+            print("Filtered activities : ", act["Start Time"], act["Calories"], act["Name"])
+
+        
 
     def fetch_metrics(self, append_existing=False, filename="garmin_data.csv"):
         if append_existing and os.path.exists(filename):
