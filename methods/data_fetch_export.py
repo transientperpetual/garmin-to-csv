@@ -1,14 +1,15 @@
 import os, csv, datetime, garth
 from datetime import date, time
 from types import SimpleNamespace
+from collections import OrderedDict
 
 class GarminDataFetcher:
     def __init__(self):
         self.device = SimpleNamespace()
         self.data = []
         self.rows_list = []
-        # self.today = datetime.date.today()
-        self.today = datetime.date(2024, 12, 26)
+        self.today = datetime.date.today()
+        # self.today = datetime.date(2025, 4, 10)
 
     def connect_device(self):
         url = "/web-gateway/device-info/primary-training-device"
@@ -24,8 +25,8 @@ class GarminDataFetcher:
     # Could not find date wise activity fetching url. Hence going this way. 
     def activity_metrics(self):
         url = "/activitylist-service/activities/search/activities"
-        start = 0               #activity date offset
-        limit = 20         #max no. of activities to fetch
+        start = 0              # activity latest date offset
+        limit = 999         # number of activities to fetch
 
         params = {"start": str(start), "limit": str(limit)}
         detailed_activities = garth.connectapi(url, params=params)
@@ -82,7 +83,7 @@ class GarminDataFetcher:
 
             activities.sort(key=lambda x: datetime.datetime.strptime(x["Start Time"], "%Y-%m-%d %H:%M:%S"))
 
-            #Create general table.
+            # NOTE:
             # For multiple activities in the day, the one with more calories will be chosen for the general day metrics.
             # More suitable methods can be devised if one frequently registers more than 1 activity in a day (this is rare for me).
 
@@ -98,23 +99,64 @@ class GarminDataFetcher:
 
         return activities
 
+
     def all_data(self):
-        # daily_metrics = self.fetch_metrics()       # list of dicts with "Date"
+        daily_metrics = self.fetch_metrics()       # list of dicts with "Date"
         activity_metrics = self.activity_metrics() # list of dicts with "Start Time" + "Calories"
 
+        # Filter activities -> one per day (highest calories)
         filtered_activities = {}
-
         for activity in activity_metrics:
             current_date = datetime.datetime.strptime(activity["Start Time"], "%Y-%m-%d %H:%M:%S").date()
-
-            if current_date not in filtered_activities or activity["Calories"] > filtered_activities[current_date]["Calories"]:
+            cal = activity.get("Calories") or 0
+            if (current_date not in filtered_activities or 
+                cal > (filtered_activities[current_date].get("Calories") or 0)):
                 filtered_activities[current_date] = activity
-            
-        filtered_activity_list = list(filtered_activities.values())
 
-        for act in filtered_activity_list:
-            print("Filtered activities : ", act["Start Time"], act["Calories"], act["Name"])
+        primary_activities = list(filtered_activities.values())
 
+        # Make lookup by date
+        activity_by_date = {
+            datetime.datetime.strptime(a["Start Time"], "%Y-%m-%d %H:%M:%S").date(): a
+            for a in primary_activities
+        }
+
+        # Merge daily metrics + activities
+        merged_data = []
+        for d in daily_metrics:
+            date_val = d["Date"]
+            if isinstance(date_val, str):
+                date_obj = datetime.datetime.strptime(date_val, "%Y-%m-%d").date()
+            else:
+                date_obj = date_val
+
+            merged = OrderedDict(d)  # preserve field order from daily_metrics
+            activity = activity_by_date.get(date_obj)
+            if activity:
+                for k, v in activity.items():
+                    if k not in merged:  # only add new keys at the end
+                        merged[k] = v
+            merged_data.append(merged)
+
+        # Build fieldnames (keep natural order)
+        fieldnames = list(merged_data[0].keys())
+        for row in merged_data[1:]:
+            for k in row.keys():
+                if k not in fieldnames:
+                    fieldnames.append(k)
+
+        # Fill missing fields
+        for row in merged_data:
+            for fn in fieldnames:
+                row.setdefault(fn, "")
+
+        # Write to CSV
+        with open("all_metrics.csv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(merged_data)
+
+        print(f"Merged data saved to all_metrics.csv with {len(merged_data)} rows.")
         
 
     def fetch_metrics(self, append_existing=False, filename="garmin_data.csv"):
